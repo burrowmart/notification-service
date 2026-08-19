@@ -1,0 +1,124 @@
+# ---------------------------------------------------------------------------
+# notification-service chart values
+#
+# All keys must be nested under "base-service:" so Helm routes them to the
+# base-service subchart.  Override individual keys at deploy time with:
+#   helm upgrade --set base-service.image.tag=sha-abc1234 ...
+# ---------------------------------------------------------------------------
+base-service:
+
+  # Force subchart objects to use "notification-service" as the resource name instead
+  # of the computed "notification-service-base-service" that Helm would otherwise derive.
+  fullnameOverride: "notification-service"
+  nameOverride: "notification-service"
+
+  # ---------------------------------------------------------------------------
+  # Image
+  # tag: "latest" here; CI replaces it with the git SHA via --set on every push.
+  # ---------------------------------------------------------------------------
+  image:
+    repository: ghcr.io/archtenet/notification-service
+    tag: latest
+    pullPolicy: IfNotPresent
+
+  replicaCount: 2
+
+  # ---------------------------------------------------------------------------
+  # Application container — non-sensitive runtime config only.
+  #
+  # Secrets (MONGO_URI, RABBITMQ_URL, REDIS_URL, COGNITO_USER_POOL_ID,
+  # COGNITO_CLIENT_ID, JWT_SECRET) are sourced from AWS Secrets Manager and
+  # synced into a k8s Secret by External Secrets Operator, then injected via
+  # envFrom.secretRef in the base chart deployment.  Never inline secrets here.
+  # ---------------------------------------------------------------------------
+  app:
+    port: 3000
+    env:
+      NODE_ENV: production
+      LOG_LEVEL: info
+      PORT: "3000"
+      RABBITMQ_QUEUE: notification-service.queue
+      # OpenTelemetry — traces exported to the in-cluster collector.
+      # Port 4317 (gRPC), not 4318 (HTTP/protobuf): tracing.ts instantiates
+      # OTLPTraceExporter from @opentelemetry/exporter-trace-otlp-grpc, which
+      # always speaks gRPC on whatever endpoint it is given -- pointing it at
+      # the HTTP receiver port silently drops every span.
+      OTEL_SERVICE_NAME: notification-service
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.observability.svc.cluster.local:4317"
+      # Cognito region is non-sensitive; pool/client IDs come from Secrets Manager
+      COGNITO_REGION: us-east-1
+
+  resources:
+    requests:
+      cpu: 150m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  # ---------------------------------------------------------------------------
+  # Envoy PEP sidecar
+  # Listens on :8080; calls OPA PDP over gRPC (ext_authz); forwards allowed
+  # requests to 127.0.0.1:3000. Pin to a digest in production.
+  # ---------------------------------------------------------------------------
+  envoy:
+    image: "envoyproxy/envoy:v1.29-latest"
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 200m
+        memory: 128Mi
+
+  service:
+    port: 80
+
+  # ---------------------------------------------------------------------------
+  # Internal nginx Ingress
+  # Reached exclusively via the Cloudflare Tunnel (cloudflared namespace).
+  # ingressClassName: nginx-internal is set in the base chart template.
+  # No LoadBalancer or NodePort is created anywhere in this chart.
+  # ---------------------------------------------------------------------------
+  ingress:
+    host: notification-service.internal.archtenet.com
+    path: /api/v1/notifications
+    pathType: Prefix
+
+  # ---------------------------------------------------------------------------
+  # OPA PDP — Envoy ext_authz gRPC target
+  #
+  # Routes to the OPA DaemonSet via its ClusterIP service. The base chart's
+  # Envoy configmap enforces failure_mode_allow: false (matches
+  # opa-policies/envoy/ext-authz.yaml): a PDP crash results in DENY, never
+  # open access.  The Envoy cluster is configured STRICT_DNS so DNS is
+  # re-resolved on reconnect without a pod restart.
+  # ---------------------------------------------------------------------------
+  opaAddress: "opa-pdp.opa-system.svc.cluster.local:9191"
+
+  # ---------------------------------------------------------------------------
+  # Secrets & Identity (AWS)
+  # ---------------------------------------------------------------------------
+
+  # Secrets Manager JSON document path.
+  # External Secrets Operator extracts all keys into a k8s Secret and
+  # the deployment's envFrom mounts them as environment variables.
+  # Expected keys: MONGO_URI, RABBITMQ_URL, REDIS_URL,
+  #                COGNITO_USER_POOL_ID, COGNITO_CLIENT_ID, JWT_SECRET
+  secretsManagerPath: "/prod/notification-service"
+
+  # IRSA — EKS projects this ServiceAccount's identity to the IAM role so the
+  # pod can call AWS Secrets Manager without static credentials.
+  # Replace ACCOUNT_ID and role name with the values output by Terraform.
+  irsaRoleArn: "arn:aws:iam::ACCOUNT_ID:role/notification-service-irsa"
+
+  # ---------------------------------------------------------------------------
+  # Autoscaling
+  # ---------------------------------------------------------------------------
+  autoscaling:
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+
+  podDisruptionBudget:
+    minAvailable: 1

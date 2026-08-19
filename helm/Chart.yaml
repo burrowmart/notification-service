@@ -1,0 +1,22 @@
+apiVersion: v2
+name: notification-service
+description: >
+  Notification-service Helm chart. Declares base-service as a chart dependency so
+  all Kubernetes object templates (Deployment, Service, Ingress, ExternalSecret,
+  HPA, PDB, ServiceAccount, ConfigMap) are inherited without duplication.
+  Only service-specific values live here.
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - archtenet
+  - microservice
+  - notification-service
+maintainers:
+  - name: platform-team
+dependencies:
+  - name: base-service
+    version: "0.1.0"
+    # file:// for local dev; replace with OCI registry path (oci://ghcr.io/archtenet/charts)
+    # in production CI after the base chart is published.
+    repository: "file://../../platform-infra/helm/base-service"

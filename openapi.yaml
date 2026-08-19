@@ -1,0 +1,150 @@
+openapi: 3.0.0
+paths:
+  /health:
+    get:
+      operationId: HealthController_check
+      parameters: []
+      responses:
+        '200':
+          description: ''
+      tags:
+        - health
+  /notifications/unread-count:
+    get:
+      operationId: NotificationsController_getUnreadCount
+      parameters: []
+      responses:
+        '200':
+          description: Unread count for the authenticated user (Redis-only read)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnreadCountResponse'
+      tags:
+        - notifications
+  /notifications:
+    get:
+      operationId: NotificationsController_list
+      parameters:
+        - name: limit
+          required: false
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: page
+          required: false
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+      responses:
+        '200':
+          description: Paginated notifications for the authenticated user (Mongo-only read)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationPageResponse'
+      tags:
+        - notifications
+  /notifications/{id}/read:
+    post:
+      operationId: NotificationsController_markAsRead
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Marked read (Mongo update + Redis DECR, floored at 0)
+      tags:
+        - notifications
+info:
+  title: Notification Service API
+  description: >-
+    Persist-then-push notifications: Mongo durable journal + Redis hot layer (unread counter, recent list) + pub/sub
+    fan-out to ws-gateway.
+  version: 0.1.0
+  contact: {}
+tags: []
+servers: []
+components:
+  schemas:
+    UnreadCountResponse:
+      type: object
+      properties:
+        count:
+          type: integer
+          minimum: 0
+          example: 3
+          description: Served from the Redis counter, rebuilt from Mongo on a cache miss
+      required:
+        - count
+    NotificationResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          example: 665f1c0e5b1a4c0012a3b4c5
+        userEmail:
+          type: string
+          format: email
+          example: alice@example.com
+          description: Recipient — the durable Mongo field name
+        type:
+          type: string
+          enum:
+            - ORDER_CONFIRMED
+            - ORDER_CANCELLED
+            - PAYMENT_SUCCEEDED
+            - PAYMENT_FAILED
+          example: ORDER_CONFIRMED
+        payload:
+          type: object
+          additionalProperties: true
+          example:
+            orderId: ord_123
+            sagaId: saga_456
+          description: Event-specific data, shaped by the consumed event (orderId, reason, …)
+        read:
+          type: boolean
+          example: false
+          description: Per-notification read state — Mongo is the source of truth; Redis holds only the aggregate unread count
+        createdAt:
+          type: string
+          format: date-time
+          example: '2026-08-19T12:34:56.000Z'
+      required:
+        - id
+        - userEmail
+        - type
+        - payload
+        - read
+        - createdAt
+    NotificationPageResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/NotificationResponse'
+        total:
+          type: integer
+          example: 137
+          description: Total notifications for this user across all pages
+        page:
+          type: integer
+          example: 1
+        limit:
+          type: integer
+          example: 20
+      required:
+        - data
+        - total
+        - page
+        - limit

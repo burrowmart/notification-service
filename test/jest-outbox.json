@@ -1,0 +1,16 @@
+{
+  "moduleFileExtensions": ["js", "json", "ts"],
+  "rootDir": "..",
+  "testEnvironment": "node",
+  "testRegex": "test/outbox\\.e2e-spec\\.ts$",
+  "testTimeout": 45000,
+  "globalSetup": "<rootDir>/test/outbox-global-setup.ts",
+  "globalTeardown": "<rootDir>/test/outbox-global-teardown.ts",
+  "transform": {
+    "^.+\\.(t|j)s$": ["ts-jest", { "tsconfig": "tsconfig.json" }]
+  },
+  "moduleNameMapper": {
+    "^@demo/contracts$": "<rootDir>/node_modules/@demo/contracts/src/index.ts",
+    "^@demo/contracts/(.*)$": "<rootDir>/node_modules/@demo/contracts/src/$1.ts"
+  }
+}
