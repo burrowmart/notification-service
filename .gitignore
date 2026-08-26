@@ -8,3 +8,7 @@ node_modules/
 jest.config.js
 jest.config.d.ts
 .env
+
+# Helm dependency build artifact — resolved by `helm dependency update`
+# in CI, or platform-infra/scripts/vendor-base-chart.sh locally.
+helm/charts/

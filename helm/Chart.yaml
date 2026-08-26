@@ -17,6 +17,11 @@ maintainers:
 dependencies:
   - name: base-service
     version: "0.1.0"
-    # file:// for local dev; replace with OCI registry path (oci://ghcr.io/archtenet/charts)
-    # in production CI after the base chart is published.
-    repository: "file://../../platform-infra/helm/base-service"
+    # Published by platform-infra's publish-base-chart workflow. CI resolves
+    # it with `helm dependency update`; the downloaded tarball lands in
+    # helm/charts/, which is gitignored because it is a build artifact.
+    #
+    # Locally there is no need to pull from the registry — run
+    # platform-infra/scripts/vendor-base-chart.sh to package the sibling
+    # checkout straight into helm/charts/ instead.
+    repository: "oci://ghcr.io/burrowmart/charts"
