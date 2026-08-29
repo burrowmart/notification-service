@@ -74,6 +74,14 @@ export class JwtGuard implements CanActivate {
   private verify(token: string): Promise<jwt.JwtPayload> {
     const issuer = this.config.get<string>('cognito.issuer')!;
     const audience = this.config.get<string>('cognito.audience');
+    // Verifying without an audience check would accept a token minted for any
+    // other app client — a leaked token from one surface must not be valid
+    // everywhere. Fail closed if the deployment forgot to configure it.
+    if (!audience) {
+      return Promise.reject(
+        new UnauthorizedException('cognito.audience is not configured'),
+      );
+    }
 
     return new Promise((resolve, reject) => {
       const getKey: jwt.GetPublicKeyOrSecret = (header, callback) => {
@@ -85,8 +93,8 @@ export class JwtGuard implements CanActivate {
 
       const opts: jwt.VerifyOptions = {
         issuer,
+        audience,
         algorithms: ['RS256'],
-        ...(audience ? { audience } : {}),
       };
 
       jwt.verify(token, getKey, opts, (err, decoded) => {
