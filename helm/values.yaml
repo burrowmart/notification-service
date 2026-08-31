@@ -26,8 +26,7 @@ base-service:
   # ---------------------------------------------------------------------------
   # Application container — non-sensitive runtime config only.
   #
-  # Secrets (MONGO_URI, RABBITMQ_URL, REDIS_URL, COGNITO_USER_POOL_ID,
-  # COGNITO_CLIENT_ID, JWT_SECRET) are sourced from AWS Secrets Manager and
+  # Secrets (MONGO_URI, RABBITMQ_URL, REDIS_URL, JWT_SECRET) are sourced from AWS Secrets Manager and
   # synced into a k8s Secret by External Secrets Operator, then injected via
   # envFrom.secretRef in the base chart deployment.  Never inline secrets here.
   # ---------------------------------------------------------------------------
@@ -45,8 +44,6 @@ base-service:
       # the HTTP receiver port silently drops every span.
       OTEL_SERVICE_NAME: notification-service
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.observability.svc.cluster.local:4317"
-      # Cognito region is non-sensitive; pool/client IDs come from Secrets Manager
-      COGNITO_REGION: us-east-1
 
   resources:
     requests:
@@ -103,8 +100,7 @@ base-service:
   # Secrets Manager JSON document path.
   # External Secrets Operator extracts all keys into a k8s Secret and
   # the deployment's envFrom mounts them as environment variables.
-  # Expected keys: MONGO_URI, RABBITMQ_URL, REDIS_URL,
-  #                COGNITO_USER_POOL_ID, COGNITO_CLIENT_ID, JWT_SECRET
+  # Expected keys: MONGO_URI, RABBITMQ_URL, REDIS_URL, JWT_SECRET
   secretsManagerPath: "/prod/notification-service"
 
   # IRSA — EKS projects this ServiceAccount's identity to the IAM role so the
