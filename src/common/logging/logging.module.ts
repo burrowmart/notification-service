@@ -14,6 +14,15 @@ import type { IncomingMessage, ServerResponse } from 'http';
           process.env.NODE_ENV !== 'production'
             ? { target: 'pino-pretty', options: { singleLine: true, colorize: true } }
             : undefined,
+        // Kubelet hits /health every 10s (readiness) and 20s (liveness), and
+        // Prometheus scrapes /metrics via the pod annotation. Neither is real
+        // traffic; logged, they bury everything that is.
+        autoLogging: {
+          ignore: (req: IncomingMessage) => {
+            const path = (req.url ?? '').split('?')[0];
+            return path === '/health' || path === '/metrics';
+          },
+        },
         // genReqId extracts the correlation id from Cloudflare/upstream headers;
         // pino-http includes it as reqId on the req/res log lines automatically.
         genReqId: (req: IncomingMessage) =>
